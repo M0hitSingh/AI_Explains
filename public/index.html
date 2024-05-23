@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Processing</title>
+<style>
+    body, html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #000;
+        font-family: Arial, sans-serif;
+        overflow: hidden; /* Prevent scrolling */
+    }
+    .container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden; /* Prevent scrolling */
+    }
+    .button-container {
+        text-align: center;
+        padding: 20px 0;
+    }
+    .button-container button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: blue;
+        color: white
+    }
+    .camera-preview {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around; /* Arrange items with equal spacing vertically */
+        align-items: center; /* Center items horizontally */
+        background-color: #5829f4f5;
+        position: relative;
+        width: 100%; /* Ensure it takes the full width of the container */
+        height: 100%; /* Ensure it takes the full height of the container */
+        overflow: hidden; /* Prevent scrolling */
+    }
+    .camera-preview video, .camera-preview img {
+        max-width: 100%;
+        max-height: 100%;
+        display: none;
+    }
+    .camera-icon {
+        font-size: 64px;
+        color: #aaa;
+    }
+    .response-container {
+        text-align: center;
+        padding: 20px 0;
+        display: none;
+    }
+    .loader {
+        border: 8px solid #f3f3f3; /* Light grey */
+        border-top: 8px solid #4500f4ad; /* Blue */
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 2s linear infinite;
+        margin: 0 auto;
+    }
+    .response-text {
+        padding: 10px;
+        border: 2px solid #4500f4ad;
+        background-color: white;
+        border-radius: 5px;
+        max-width: 80%;
+        min-height: 100px;
+        margin: 0 auto;
+    }
+    .camera-preview.slide-in {
+        animation: slideIn 0.5s ease forwards;
+    }
+
+    @keyframes slideIn {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(0); }
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="button-container">
+        <input type="file" accept="image/*" id="upload-photo" style="display: none;">
+        <button id="open-camera">Open Camera</button>
+        <button id="upload-btn">Upload Photo</button>
+    </div>
+    <div class="camera-preview" id="camera-preview">
+        <i class="fas fa-camera camera-icon"></i>
+        <h1 style="font-size: 5rem; margin: 0% 20% 0% 0%;">AI Explains </h1>
+        <video id="preview-video" autoplay playsinline></video>
+        <!-- <h2 style="font-size: 5rem;margin: 0% 10% 0% 0%">Explains</h2> -->
+        <img id="preview-image" src="" alt="Uploaded Photo">
+    </div>
+    <div class="button-container">
+        <button id="explain">Explain</button>
+    </div>
+    <div class="response-container" id="response-container">
+        <div class="loader"></div>
+        <div class="response-text" id="response-text"></div>
+    </div>
+    <div class="response-dialog" id="response-dialog">
+        <!-- <div class="loader"></div> -->
+        <div class="response-text" id="dialog-text"></div>
+    </div>
+</div>
+
+<script src="https://kit.fontawesome.com/a076d05399.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const openCameraButton = document.getElementById('open-camera');
+    const uploadButton = document.getElementById('upload-btn');
+    const uploadInput = document.getElementById('upload-photo');
+    const cameraPreview = document.getElementById('camera-preview');
+    const previewVideo = document.getElementById('preview-video');
+    const previewImage = document.getElementById('preview-image');
+    const cameraIcon = document.querySelector('.camera-icon');
+    const explainButton = document.getElementById('explain');
+    const responseContainer = document.getElementById('response-container');
+    const responseText = document.getElementById('response-text');
+    const responseDialog = document.getElementById('response-dialog');
+    const dialogText = document.getElementById('dialog-text');
+    let isCameraOpen = false;
+
+    openCameraButton.addEventListener('click', function() {
+        cameraPreview.style.display = 'flex';
+        cameraIcon.style.display = 'none';
+        previewVideo.style.display = 'block';
+        previewImage.style.display = 'none';
+        isCameraOpen = true;
+        // Hide AI and Explain text
+        document.querySelector('.container h1').style.display = 'none';
+        document.querySelector('.container h2').style.display = 'none';
+        openCamera();
+    });
+    openCameraButton.addEventListener('click', function() {
+        openCamera();
+        toggleAnimation();
+    });
+
+    function toggleAnimation() {
+        cameraPreview.classList.toggle('slide-in');
+    }
+
+
+    uploadButton.addEventListener('click', function() {
+        uploadInput.click();
+    });
+
+    uploadInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            showPreview(file);
+        }
+    });
+
+    explainButton.addEventListener('click', function() {
+        if (isCameraOpen) {
+            captureImageAndSend();
+        } else {
+            const file = uploadInput.files[0];
+            if (file) {
+                showLoader();
+                sendImage(file);
+            }
+        }
+    });
+
+    function openCamera() {
+        cameraPreview.style.display = 'flex';
+        cameraIcon.style.display = 'none';
+        previewVideo.style.display = 'block';
+        previewImage.style.display = 'none';
+        isCameraOpen = true;
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                previewVideo.srcObject = stream;
+            })
+            .catch(function(error) {
+                console.error('Error accessing camera:', error);
+            });
+        } else {
+            console.error('getUserMedia not supported');
+        }
+    }
+
+    function showPreview(file) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            previewImage.src = reader.result;
+            cameraPreview.style.display = 'flex';
+            cameraIcon.style.display = 'none';
+            previewImage.style.display = 'block';
+            previewVideo.style.display = 'none';
+        }
+        reader.readAsDataURL(file);
+    }
+
+    function showLoader() {
+        responseContainer.style.display = 'block';
+        responseText.textContent = '';
+    }
+
+    function hideLoader() {
+        responseContainer.style.display = 'none';
+    }
+
+    function sendImage(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        fetch('https://2116-2405-201-402a-f881-811c-5dc2-2c83-4d60.ngrok-free.app', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(data => {
+            responseText.textContent = data;
+            hideLoader();
+            responseDialog.style.display = 'block';
+            dialogText.textContent = data;
+        })
+        .catch(error => {
+            console.error('Error sending image:', error);
+            hideLoader();
+            responseDialog.style.display = 'block';
+            dialogText.textContent = 'Error occurred while processing image.';
+        });
+    }
+
+    function captureImageAndSend() {
+        const canvas = document.createElement('canvas');
+        canvas.width = previewVideo.videoWidth;
+        canvas.height = previewVideo.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+            if (blob) {
+                const file = new File([blob], 'captured-image.png', { type: 'image/png' });
+                showLoader();
+                sendImage(file);
+            } else {
+                console.error('Error capturing image.');
+                // Handle error
+            }
+        }, 'image/png');
+    }
+});
+</script>
+</body>
+</html>
